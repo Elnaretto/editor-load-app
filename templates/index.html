@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <title>Нагрузка редакторов</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="container py-4">
+
+    <!-- 🔘 Переключатель страниц -->
+    <div class="mb-4 d-flex gap-2">
+        <a href="{{ url_for('index') }}" class="btn btn-outline-primary">🏠 Главная</a>
+        <a href="{{ url_for('visualization') }}" class="btn btn-outline-success">📊 По шефу</a>
+        <a href="{{ url_for('visualization_timeline') }}" class="btn btn-outline-info">📈 Динамика</a>
+    </div>
+
+    <h1>Добавить нагрузку редактора</h1>
+
+    <button onclick="window.location.href='{{ url_for('visualization') }}'" class="btn btn-secondary mb-3">Визуализация</button>
+
+    <form method="POST" action="{{ url_for('submit_loads') }}">
+        <label for="chief">Выберите шефа:</label>
+        <select id="chief" name="chief" required onchange="updateEditors()" class="form-select w-auto">
+            <option value="">-- Выберите --</option>
+            {% for chief in chiefs %}
+                <option value="{{ chief.id }}">{{ chief.name }}</option>
+            {% endfor %}
+        </select>
+
+        <br><br>
+
+        <label for="editor">Выберите редактора:</label>
+        <select id="editor" name="editor" required class="form-select w-auto">
+            <option value="">-- Сначала выберите шефа --</option>
+        </select>
+
+        <br><br>
+
+        <label for="date">Дата:</label>
+        <input type="date" id="date" name="date" value="{{ today }}" required class="form-control w-auto">
+
+        <br><br>
+
+        <h3>Введите часы по проектам</h3>
+        <div class="mb-3 border p-3 rounded">
+            {% for project in projects %}
+                <div class="mb-2 d-flex align-items-center gap-2">
+                    <div style="width: 16px; height: 16px; border-radius: 50%; background-color:
+                        {% if project.priority == 'team-high' %}#ffcc00
+                        {% elif project.priority == 'all-high' %}#ff0000
+                        {% elif project.priority == 'above-average' %}#ff0000
+                        {% elif project.priority == 'medium' %}#007bff
+                        {% elif project.priority == 'low' %}#007bff
+                        {% else %}#cccccc{% endif %};
+                    " title="Приоритет: {{ project.priority }}"></div>
+                    <label for="hours_{{ project.id }}" class="flex-grow-1 mb-0">{{ project.name }}</label>
+                    <input type="number" step="0.1" min="0" name="hours_{{ project.id }}" id="hours_{{ project.id }}" value="0" class="form-control w-auto" style="max-width: 80px;">
+                    <select name="priority_{{ project.id }}" class="form-select form-select-sm w-auto ms-2" style="min-width: 180px;">
+                        <option value="team-high" {% if project.priority == 'team-high' %}selected{% endif %}>⚠️ Высший приоритет для команды</option>
+                        <option value="all-high" {% if project.priority == 'all-high' %}selected{% endif %}>❗❗❗ Высший приоритет для всех</option>
+                        <option value="above-average" {% if project.priority == 'above-average' %}selected{% endif %}>❗ Выше среднего приоритет</option>
+                        <option value="medium" {% if project.priority == 'medium' %}selected{% endif %}>🔵❗ Средний приоритет</option>
+                        <option value="low" {% if project.priority == 'low' %}selected{% endif %}>🔵❓ Низкий приоритет</option>
+                    </select>
+                </div>
+            {% endfor %}
+        </div>
+
+        <button type="submit" class="btn btn-success">Сохранить</button>
+    </form>
+
+    <!-- Форма для выгрузки Excel -->
+    <hr>
+    <h5>Выгрузить данные в Excel</h5>
+    <form method="GET" action="{{ url_for('export_excel') }}" class="mb-4">
+        <label for="startDate">С:</label>
+        <input type="date" id="startDate" name="start_date" required>
+        <label for="endDate">По:</label>
+        <input type="date" id="endDate" name="end_date" required>
+        <button type="submit" class="btn btn-primary ms-2">Выгрузить Excel</button>
+    </form>
+
+    <h5>➕ Добавить новый проект</h5>
+    <div style="max-width: 300px;">
+        <input type="text" id="project-name-input" class="form-control mb-2" placeholder="Название проекта" />
+        <select id="priority-select" class="form-select mb-2">
+            <option value="team-high">⚠️ Высший приоритет для команды</option>
+            <option value="all-high">❗❗❗ Высший приоритет для всех</option>
+            <option value="above-average">❗ Выше среднего приоритет</option>
+            <option value="medium" selected>🔵❗ Средний приоритет</option>
+            <option value="low">🔵❓ Низкий приоритет</option>
+        </select>
+        <button id="save-project-btn" type="button" class="btn btn-primary mb-4">Сохранить проект</button>
+        <div id="project-status-msg" class="text-success" style="display:none;"></div>
+    </div>
+
+    <script>
+        const editorsByChief = {
+            {% for chief in chiefs %}
+                "{{ chief.id }}": [
+                    {% for editor in chief.editors %}
+                        {"id": "{{ editor.id }}", "login": "{{ editor.login }}"},
+                    {% endfor %}
+                ],
+            {% endfor %}
+        };
+
+        function updateEditors() {
+            const chiefSelect = document.getElementById('chief');
+            const editorSelect = document.getElementById('editor');
+            const selectedChief = chiefSelect.value;
+
+            editorSelect.innerHTML = '';
+
+            if (!selectedChief || !editorsByChief[selectedChief]) {
+                editorSelect.innerHTML = '<option value="">-- Сначала выберите шефа --</option>';
+                return;
+            }
+
+            const editors = editorsByChief[selectedChief];
+            editorSelect.innerHTML = '<option value="">-- Выберите редактора --</option>';
+
+            editors.forEach(editor => {
+                const option = document.createElement('option');
+                option.value = editor.id;
+                option.textContent = editor.login;
+                editorSelect.appendChild(option);
+            });
+        }
+
+        document.getElementById('save-project-btn').addEventListener('click', async () => {
+            const nameInput = document.getElementById('project-name-input');
+            const prioritySelect = document.getElementById('priority-select');
+            const statusMsg = document.getElementById('project-status-msg');
+
+            const name = nameInput.value.trim();
+            const priority = prioritySelect.value;
+
+            if (!name) {
+                alert('Введите название проекта');
+                return;
+            }
+
+            try {
+                const response = await fetch('/add_project', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, priority})
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    statusMsg.style.display = 'block';
+                    statusMsg.textContent = `Проект "${result.project.name}" добавлен с приоритетом "${result.project.priority}"`;
+
+                    nameInput.value = '';
+                    prioritySelect.value = 'medium';
+
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    alert(result.error || 'Ошибка при добавлении проекта');
+                }
+            } catch (e) {
+                alert('Ошибка сети или сервера');
+            }
+        });
+    </script>
+
+</body>
+</html>

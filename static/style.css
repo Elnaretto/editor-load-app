@@ -1,0 +1,29 @@
+@property --pattern-seed {
+  syntax: "<number>";
+  initial-value: 123456;
+  inherits: true;
+}
+
+@property --pattern-background {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: #141b3d;
+}
+
+@property --pattern-colors {
+  syntax: "<color>#";
+  initial-value: #e9edeb, #66aac6, #e63890;
+  inherits: true;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.worklet-canvas {
+  width: 100vw;
+  height: 100vh;
+  background-image: paint(voronoiPattern);
+}

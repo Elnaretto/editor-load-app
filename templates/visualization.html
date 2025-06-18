@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<link href="https://fonts.googleapis.com/css?family=DM+Sans:400,500,700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link href="https://fonts.googleapis.com/css?family=DM+Sans:400,500,700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <title>Визуализация нагрузки</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="container py-4">
+
+  <!-- Переключатель страниц -->
+  <div class="mb-4 d-flex gap-2">
+    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">🏠 Главная</a>
+    <a href="{{ url_for('visualization') }}" class="btn btn-outline-success">📊 По шефу</a>
+    <a href="{{ url_for('visualization_timeline') }}" class="btn btn-outline-info">📈 Динамика</a>
+  </div>
+
+  <h1>Визуализация нагрузки по проектам</h1>
+
+  <form method="get" action="{{ url_for('visualization') }}">
+    <label for="chief-select">Выберите шефа:</label>
+    <select id="chief-select" name="chief_id" onchange="this.form.submit()">
+      <option value="0" {% if selected_chief_id == 0 %}selected{% endif %}>Вся редакция</option>
+      {% for chief in chiefs %}
+        <option value="{{ chief.id }}" {% if chief.id == selected_chief_id %}selected{% endif %}>
+          {{ chief.name }}
+        </option>
+      {% endfor %}
+    </select>
+  </form>
+
+  {% if message %}
+    <p>{{ message }}</p>
+  {% endif %}
+
+  {% if graph_html %}
+    <div>
+      {{ graph_html | safe }}
+    </div>
+
+    {% if details %}
+      <h2>Детали по проектам и редакторам:</h2>
+      <ul>
+        {% for project, editors in details.items() %}
+          <li><strong>{{ project }}</strong>
+            <ul>
+              {% for item in editors %}
+                <li>{{ item.editor }}: {{ item.hours }} часов</li>
+              {% endfor %}
+            </ul>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endif %}
+
+  <br>
+  <button onclick="window.history.back()" class="btn btn-secondary">Назад</button>
+
+</body>
+</html>
