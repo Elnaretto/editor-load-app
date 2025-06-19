@@ -125,7 +125,7 @@ def editors_for_chief(chief_id):
 
 @app.route('/submit_loads', methods=['POST'])
 def submit_loads():
-    data = request.form
+    data = request.json  # ожидаем JSON на вход
     editor_id = int(data['editor'])
     date_str = data['date']
     date = datetime.strptime(date_str, '%Y-%m-%d').date()
@@ -140,30 +140,66 @@ def submit_loads():
             if new_priority != project.priority:
                 project.priority = new_priority
 
-    # Сохраняем часы
+    # Обрабатываем часы с корректировкой
     for project in projects:
         hours_key = f"hours_{project.id}"
-        if hours_key in data and data[hours_key].strip():
-            hours = float(data[hours_key])
-            if hours > 0:
-                load_entry = LoadEntry.query.filter_by(
-                    editor_id=editor_id,
-                    project_id=project.id,
-                    date=date
-                ).first()
-                if load_entry:
-                    load_entry.hours = hours
+        if hours_key in data and str(data[hours_key]).strip():
+            try:
+                delta_hours = float(data[hours_key])
+            except ValueError:
+                continue
+
+            load_entry = LoadEntry.query.filter_by(
+                editor_id=editor_id,
+                project_id=project.id,
+                date=date
+            ).first()
+
+            if load_entry:
+                new_hours = load_entry.hours + delta_hours
+                if new_hours <= 0:
+                    db.session.delete(load_entry)
                 else:
+                    load_entry.hours = new_hours
+            else:
+                if delta_hours > 0:
                     load_entry = LoadEntry(
                         editor_id=editor_id,
                         project_id=project.id,
                         date=date,
-                        hours=hours
+                        hours=delta_hours
                     )
                     db.session.add(load_entry)
 
     db.session.commit()
-    return redirect(url_for('index'))
+
+    # Вернем обновленные нагрузки сразу после изменения
+    updated_loads = LoadEntry.query.filter_by(editor_id=editor_id, date=date).all()
+    result = []
+    for load in updated_loads:
+        result.append({
+            'project_id': load.project_id,
+            'hours': load.hours
+        })
+
+    return jsonify({'message': 'Обновлено', 'loads': result})
+
+@app.route('/get_loads/<int:editor_id>/<date_str>')
+def get_loads(editor_id, date_str):
+    try:
+        date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Неверный формат даты'}), 400
+
+    loads = LoadEntry.query.filter_by(editor_id=editor_id, date=date).all()
+    data = []
+    for load in loads:
+        data.append({
+            'project_id': load.project_id,
+            'hours': load.hours
+        })
+    return jsonify(data)
+
 
 @app.route('/add_project', methods=['POST'])
 def add_project():
@@ -307,6 +343,24 @@ def visualization():
     return render_template('visualization.html', chiefs=chiefs, selected_chief_id=selected_chief_id,
                            graph_html=graph_html, details=details, message=None)
 
+
+    load_results = LoadResult.query.all()
+    import json
+    saved_results = []
+    for r in load_results:
+        try:
+            load_data = json.loads(r.data)
+        except Exception:
+            load_data = r.data
+        saved_results.append({
+            'editor_id': r.editor_id,
+            'date': r.date.strftime('%Y-%m-%d'),
+            'load_data': load_data
+        })
+
+    return render_template('visualization.html', ..., saved_results=saved_results)
+
+
 @app.route('/update_priority', methods=['POST'])
 def update_priority():
     projects = Project.query.all()
@@ -363,6 +417,104 @@ def visualization_timeline():
                            details={},
                            message=None,
                            chiefs=[], selected_chief_id=None)
+
+@app.route('/delete_loads', methods=['POST'])
+def delete_loads():
+    data = request.get_json()
+    editor_id = data.get('editor_id')
+    date_str = data.get('date', None)  # может быть None
+
+    if not editor_id:
+        return jsonify({'error': 'Не указан редактор'}), 400
+
+    # Проверим, что редактор существует
+    editor = Editor.query.get(editor_id)
+    if not editor:
+        return jsonify({'error': 'Редактор не найден'}), 404
+
+    if date_str:
+        # Преобразуем дату из строки в datetime.date
+        try:
+            date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Неверный формат даты'}), 400
+
+        # Удаляем нагрузку для редактора на конкретную дату
+        deleted = db.session.query(LoadEntry).filter_by(editor_id=editor_id, date=date).delete()
+    else:
+        # Удаляем ВСЕ нагрузки редактора за все время
+        deleted = db.session.query(LoadEntry).filter_by(editor_id=editor_id).delete()
+
+    db.session.commit()
+
+    return jsonify({'message': f'Удалено записей: {deleted}'})
+
+# --- Новая таблица для сохранения результатов нагрузки (до 10 человек одновременно) ---
+class LoadResult(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    editor_id = db.Column(db.Integer, nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    data = db.Column(db.Text, nullable=False)  # Можно хранить JSON строку с нагрузкой
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+# --- Сохраняем результаты нагрузки ---
+@app.route('/save_load_result', methods=['POST'])
+def save_load_result():
+    data = request.json
+    editor_id = data.get('editor_id')
+    date_str = data.get('date')
+    load_data = data.get('load_data')  # Ожидаем JSON строку или словарь
+
+    if not editor_id or not date_str or not load_data:
+        return jsonify({'error': 'editor_id, date и load_data обязательны'}), 400
+
+    try:
+        date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Неверный формат даты'}), 400
+
+    existing = LoadResult.query.filter_by(editor_id=editor_id, date=date).first()
+
+    # Преобразуем load_data в строку, если это dict
+    import json
+    if isinstance(load_data, dict):
+        load_data = json.dumps(load_data)
+
+    if existing:
+        existing.data = load_data
+    else:
+        # Ограничиваем максимум 10 записей для разных редакторов/дат
+        count = LoadResult.query.count()
+        if count >= 10:
+            # Можно по логике удалить старейшую запись
+            oldest = LoadResult.query.order_by(LoadResult.updated_at.asc()).first()
+            if oldest:
+                db.session.delete(oldest)
+
+        new_result = LoadResult(editor_id=editor_id, date=date, data=load_data)
+        db.session.add(new_result)
+
+    db.session.commit()
+    return jsonify({'message': 'Результаты сохранены'})
+
+# --- Получить сохранённые результаты нагрузки для отображения на второй странице ---
+@app.route('/get_load_results', methods=['GET'])
+def get_load_results():
+    results = LoadResult.query.all()
+    import json
+    output = []
+    for r in results:
+        try:
+            load_data = json.loads(r.data)
+        except Exception:
+            load_data = r.data  # если не json, то просто строка
+        output.append({
+            'editor_id': r.editor_id,
+            'date': r.date.strftime('%Y-%m-%d'),
+            'load_data': load_data
+        })
+    return jsonify(output)
+
 
 # --- Запуск ---
 if __name__ == '__main__':

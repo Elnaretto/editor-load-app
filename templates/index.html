@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8" />
     <title>Нагрузка редакторов</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
 </head>
 <body class="container py-4">
 
-    <!-- 🔘 Переключатель страниц -->
+    <!-- Навигация -->
     <div class="mb-4 d-flex gap-2">
         <a href="{{ url_for('index') }}" class="btn btn-outline-primary">🏠 Главная</a>
         <a href="{{ url_for('visualization') }}" class="btn btn-outline-success">📊 По шефу</a>
@@ -18,7 +18,7 @@
 
     <button onclick="window.location.href='{{ url_for('visualization') }}'" class="btn btn-secondary mb-3">Визуализация</button>
 
-    <form method="POST" action="{{ url_for('submit_loads') }}">
+    <form id="load-form" method="POST" action="{{ url_for('submit_loads') }}">
         <label for="chief">Выберите шефа:</label>
         <select id="chief" name="chief" required onchange="updateEditors()" class="form-select w-auto">
             <option value="">-- Выберите --</option>
@@ -30,21 +30,21 @@
         <br><br>
 
         <label for="editor">Выберите редактора:</label>
-        <select id="editor" name="editor" required class="form-select w-auto">
+        <select id="editor" name="editor" required class="form-select w-auto" onchange="loadEditorLoads()">
             <option value="">-- Сначала выберите шефа --</option>
         </select>
 
         <br><br>
 
         <label for="date">Дата:</label>
-        <input type="date" id="date" name="date" value="{{ today }}" required class="form-control w-auto">
+        <input type="date" id="date" name="date" value="{{ today }}" required class="form-control w-auto" onchange="loadEditorLoads()">
 
         <br><br>
 
         <h3>Введите часы по проектам</h3>
         <div class="mb-3 border p-3 rounded">
             {% for project in projects %}
-                <div class="mb-2 d-flex align-items-center gap-2">
+                <div class="mb-2 d-flex align-items-center gap-2" data-project-id="{{ project.id }}">
                     <div style="width: 16px; height: 16px; border-radius: 50%; background-color:
                         {% if project.priority == 'team-high' %}#ffcc00
                         {% elif project.priority == 'all-high' %}#ff0000
@@ -54,7 +54,8 @@
                         {% else %}#cccccc{% endif %};
                     " title="Приоритет: {{ project.priority }}"></div>
                     <label for="hours_{{ project.id }}" class="flex-grow-1 mb-0">{{ project.name }}</label>
-                    <input type="number" step="0.1" min="0" name="hours_{{ project.id }}" id="hours_{{ project.id }}" value="0" class="form-control w-auto" style="max-width: 80px;">
+                    <input type="number" step="0.1" name="hours_{{ project.id }}" id="hours_{{ project.id }}" value="0" class="form-control w-auto" style="max-width: 80px;" placeholder="± часы">
+                    <span id="display_hours_{{ project.id }}" class="ms-2">0</span>
                     <select name="priority_{{ project.id }}" class="form-select form-select-sm w-auto ms-2" style="min-width: 180px;">
                         <option value="team-high" {% if project.priority == 'team-high' %}selected{% endif %}>⚠️ Высший приоритет для команды</option>
                         <option value="all-high" {% if project.priority == 'all-high' %}selected{% endif %}>❗❗❗ Высший приоритет для всех</option>
@@ -66,11 +67,13 @@
             {% endfor %}
         </div>
 
-        <button type="submit" class="btn btn-success">Сохранить</button>
+        <button type="button" id="submit-loads-btn" class="btn btn-success">Сохранить</button>
     </form>
 
-    <!-- Форма для выгрузки Excel -->
+    <button type="button" id="clear-hours-btn" class="btn btn-warning mb-3">Очистить все часы нагрузки</button>
+
     <hr>
+
     <h5>Выгрузить данные в Excel</h5>
     <form method="GET" action="{{ url_for('export_excel') }}" class="mb-4">
         <label for="startDate">С:</label>
@@ -94,78 +97,211 @@
         <div id="project-status-msg" class="text-success" style="display:none;"></div>
     </div>
 
-    <script>
-        const editorsByChief = {
-            {% for chief in chiefs %}
-                "{{ chief.id }}": [
-                    {% for editor in chief.editors %}
-                        {"id": "{{ editor.id }}", "login": "{{ editor.login }}"},
-                    {% endfor %}
-                ],
-            {% endfor %}
-        };
+    <button id="delete-loads-btn" type="button" class="btn btn-danger mb-3">Удалить часы нагрузки</button>
 
-        function updateEditors() {
-            const chiefSelect = document.getElementById('chief');
-            const editorSelect = document.getElementById('editor');
-            const selectedChief = chiefSelect.value;
+<script>
+const editorsByChief = {
+    {% for chief in chiefs %}
+    "{{ chief.id }}": [
+        {% for editor in chief.editors %}
+        {"id": "{{ editor.id }}", "login": "{{ editor.login }}"},
+        {% endfor %}
+    ],
+    {% endfor %}
+};
 
-            editorSelect.innerHTML = '';
+function updateEditors() {
+    const chiefSelect = document.getElementById('chief');
+    const editorSelect = document.getElementById('editor');
+    const selectedChief = chiefSelect.value;
 
-            if (!selectedChief || !editorsByChief[selectedChief]) {
-                editorSelect.innerHTML = '<option value="">-- Сначала выберите шефа --</option>';
-                return;
-            }
+    editorSelect.innerHTML = '';
 
-            const editors = editorsByChief[selectedChief];
-            editorSelect.innerHTML = '<option value="">-- Выберите редактора --</option>';
+    if (!selectedChief || !editorsByChief[selectedChief]) {
+        editorSelect.innerHTML = '<option value="">-- Сначала выберите шефа --</option>';
+        clearLoadForm();
+        return;
+    }
 
-            editors.forEach(editor => {
-                const option = document.createElement('option');
-                option.value = editor.id;
-                option.textContent = editor.login;
-                editorSelect.appendChild(option);
-            });
+    const editors = editorsByChief[selectedChief];
+    editorSelect.innerHTML = '<option value="">-- Выберите редактора --</option>';
+
+    editors.forEach(editor => {
+        const option = document.createElement('option');
+        option.value = editor.id;
+        option.textContent = editor.login;
+        editorSelect.appendChild(option);
+    });
+
+    clearLoadForm();
+}
+
+function clearLoadForm() {
+    document.querySelectorAll('[data-project-id]').forEach(div => {
+        const projectId = div.getAttribute('data-project-id');
+        const hoursInput = document.getElementById(`hours_${projectId}`);
+        const prioritySelect = div.querySelector(`select[name="priority_${projectId}"]`);
+        const displaySpan = document.getElementById(`display_hours_${projectId}`);
+
+        if (hoursInput) hoursInput.value = '0';
+        if (prioritySelect) prioritySelect.value = 'medium';
+        if (displaySpan) displaySpan.textContent = '0';
+    });
+}
+
+async function loadEditorLoads() {
+    const editorId = document.getElementById('editor').value;
+    const date = document.getElementById('date').value;
+
+    if (!editorId || !date) {
+        clearLoadForm();
+        return;
+    }
+
+    try {
+        const response = await fetch(`/get_loads?editor_id=${editorId}&date=${date}`);
+        if (!response.ok) throw new Error('Ошибка загрузки данных');
+        const data = await response.json();
+
+        clearLoadForm();
+
+        data.loads.forEach(load => {
+            const hoursInput = document.getElementById(`hours_${load.project_id}`);
+            const prioritySelect = document.querySelector(`select[name="priority_${load.project_id}"]`);
+            const displaySpan = document.getElementById(`display_hours_${load.project_id}`);
+
+            if (hoursInput) hoursInput.value = load.hours;
+            if (prioritySelect) prioritySelect.value = load.priority;
+            if (displaySpan) displaySpan.textContent = parseFloat(load.hours).toFixed(2);
+        });
+    } catch (e) {
+        console.error(e);
+        alert('Не удалось загрузить данные нагрузки редактора');
+    }
+}
+
+document.getElementById('submit-loads-btn').addEventListener('click', async () => {
+    const editorId = document.getElementById('editor').value;
+    const date = document.getElementById('date').value;
+
+    if (!editorId || !date) {
+        alert('Пожалуйста, выберите шефа, редактора и дату.');
+        return;
+    }
+
+    let data = { editor: editorId, date: date };
+
+    document.querySelectorAll('[data-project-id]').forEach(div => {
+        const projectId = div.getAttribute('data-project-id');
+        const hoursInput = document.getElementById(`hours_${projectId}`);
+        const prioritySelect = div.querySelector(`select[name="priority_${projectId}"]`);
+
+        if (hoursInput && hoursInput.value.trim() !== '') {
+            data[`hours_${projectId}`] = hoursInput.value;
+        }
+        if (prioritySelect) {
+            data[`priority_${projectId}`] = prioritySelect.value;
+        }
+    });
+
+    try {
+        const response = await fetch('/submit_loads', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            alert('Ошибка при отправке данных');
+            return;
         }
 
-        document.getElementById('save-project-btn').addEventListener('click', async () => {
-            const nameInput = document.getElementById('project-name-input');
-            const prioritySelect = document.getElementById('priority-select');
-            const statusMsg = document.getElementById('project-status-msg');
+        const result = await response.json();
 
-            const name = nameInput.value.trim();
-            const priority = prioritySelect.value;
-
-            if (!name) {
-                alert('Введите название проекта');
-                return;
-            }
-
-            try {
-                const response = await fetch('/add_project', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({name, priority})
-                });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    statusMsg.style.display = 'block';
-                    statusMsg.textContent = `Проект "${result.project.name}" добавлен с приоритетом "${result.project.priority}"`;
-
-                    nameInput.value = '';
-                    prioritySelect.value = 'medium';
-
-                    setTimeout(() => window.location.reload(), 1500);
-                } else {
-                    alert(result.error || 'Ошибка при добавлении проекта');
-                }
-            } catch (e) {
-                alert('Ошибка сети или сервера');
+        result.loads.forEach(load => {
+            const el = document.getElementById(`display_hours_${load.project_id}`);
+            if (el) {
+                el.textContent = parseFloat(load.hours).toFixed(2);
             }
         });
-    </script>
 
+        alert('Данные успешно сохранены');
+    } catch (e) {
+        alert('Ошибка сети или сервера');
+    }
+});
+
+document.getElementById('clear-hours-btn').addEventListener('click', () => {
+    clearLoadForm();
+});
+
+document.getElementById('save-project-btn').addEventListener('click', async () => {
+    const nameInput = document.getElementById('project-name-input');
+    const prioritySelect = document.getElementById('priority-select');
+    const statusMsg = document.getElementById('project-status-msg');
+
+    const name = nameInput.value.trim();
+    const priority = prioritySelect.value;
+
+    if (!name) {
+        alert('Введите название проекта');
+        return;
+    }
+
+    try {
+        const response = await fetch('/add_project', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ name, priority })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            statusMsg.style.display = 'block';
+            statusMsg.textContent = `Проект "${result.project.name}" добавлен с приоритетом "${result.project.priority}"`;
+
+            nameInput.value = '';
+            prioritySelect.value = 'medium';
+
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            alert(result.error || 'Ошибка при добавлении проекта');
+        }
+    } catch (e) {
+        alert('Ошибка сети или сервера');
+    }
+});
+
+document.getElementById('delete-loads-btn').addEventListener('click', async () => {
+    if (!confirm('Вы действительно хотите удалить часы нагрузки?')) return;
+
+    const editorId = document.getElementById('editor').value;
+    const date = document.getElementById('date').value; // может быть пустым
+
+    if (!editorId) {
+        alert('Выберите редактора для удаления нагрузки');
+        return;
+    }
+
+    try {
+        const response = await fetch('/delete_loads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ editor_id: editorId, date: date || null }),
+        });
+
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(err || 'Ошибка удаления нагрузки');
+        }
+
+        alert('Часы нагрузки успешно удалены');
+        clearLoadForm();
+    } catch (e) {
+        alert('Ошибка при удалении нагрузки: ' + e.message);
+    }
+});
+</script>
 </body>
 </html>

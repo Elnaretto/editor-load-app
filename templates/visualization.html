@@ -35,29 +35,65 @@
     <p>{{ message }}</p>
   {% endif %}
 
-  {% if graph_html %}
-    <div>
-      {{ graph_html | safe }}
-    </div>
+{% if graph_html %}
+  <div id="graph-container">
+    {{ graph_html | safe }}
+  </div>
 
-    {% if details %}
-      <h2>Детали по проектам и редакторам:</h2>
-      <ul>
-        {% for project, editors in details.items() %}
-          <li><strong>{{ project }}</strong>
-            <ul>
-              {% for item in editors %}
-                <li>{{ item.editor }}: {{ item.hours }} часов</li>
-              {% endfor %}
-            </ul>
-          </li>
-        {% endfor %}
-      </ul>
-    {% endif %}
+  {% if details %}
+    <h2>Детали по проектам и редакторам:</h2>
+    <ul>
+      {% for project, editors in details.items() %}
+        <li><strong>{{ project }}</strong>
+          <ul>
+            {% for item in editors %}
+              <li>{{ item.editor }}: {{ "%.2f"|format(item.hours) }} часов</li>
+            {% endfor %}
+          </ul>
+        </li>
+      {% endfor %}
+    </ul>
   {% endif %}
+{% endif %}
+  <form method="GET" action="{{ url_for('export_excel') }}" style="margin-top: 20px;">
+  <label for="startDate">С:</label>
+  <input type="date" id="startDate" name="start_date" required>
+  <label for="endDate">По:</label>
+  <input type="date" id="endDate" name="end_date" required>
+  <button type="submit" class="btn-export">Выгрузить Excel</button>
+</form>
 
   <br>
   <button onclick="window.history.back()" class="btn btn-secondary">Назад</button>
 
 </body>
+<script>
+  const selectedChiefId = {{ selected_chief_id or 0 }};
+  
+  async function refreshData() {
+    try {
+      const response = await fetch(`/api/visualization_data?chief_id=${selectedChiefId}`);
+      if (!response.ok) {
+        console.error("Ошибка загрузки данных для визуализации");
+        return;
+      }
+      const data = await response.json();
+      
+      // Здесь обновляем график на странице
+      const graphDiv = document.getElementById('graph-container');
+      if (!graphDiv) return;
+
+      graphDiv.innerHTML = data.graph_html;
+
+      // Опционально, обновить детали если есть
+      // ...
+      
+    } catch (error) {
+      console.error("Ошибка обновления данных визуализации", error);
+    }
+  }
+
+  // Обновлять каждые 10 секунд
+  setInterval(refreshData, 10000);
+</script>
 </html>
