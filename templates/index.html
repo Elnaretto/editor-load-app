@@ -7,12 +7,21 @@
 </head>
 <body class="container py-4">
 
-    <!-- Навигация -->
-    <div class="mb-4 d-flex gap-2">
-        <a href="{{ url_for('index') }}" class="btn btn-outline-primary">🏠 Главная</a>
-        <a href="{{ url_for('visualization') }}" class="btn btn-outline-success">📊 По шефу</a>
-        <a href="{{ url_for('visualization_timeline') }}" class="btn btn-outline-info">📈 Динамика</a>
-    </div>
+<div class="mb-4 d-flex gap-2 align-items-center">
+    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">🏠 Главная</a>
+    <a href="{{ url_for('visualization') }}" class="btn btn-outline-success">📊 По шефу</a>
+    <a href="{{ url_for('visualization') }}" class="btn btn-outline-info">📈 Динамика</a>
+    <a href="{{ url_for('visualization_editors') }}">👌Визуализация для редакторов</a>
+
+    <form method="get" action="{{ url_for('index') }}" class="ms-auto">
+        <select name="project_id" onchange="this.form.submit()" class="form-select form-select-sm">
+            {% for project in projects %}
+                <option value="{{ project.id }}" {% if project.id == current_project_id %}selected{% endif %}>{{ project.name }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
 
     <h1>Добавить нагрузку редактора</h1>
 
@@ -176,7 +185,6 @@ async function loadEditorLoads() {
         });
     } catch (e) {
         console.error(e);
-        alert('Не удалось загрузить данные нагрузки редактора');
     }
 }
 
@@ -190,6 +198,7 @@ document.getElementById('submit-loads-btn').addEventListener('click', async () =
     }
 
     let data = { editor: editorId, date: date };
+    let totalHours = 0;
 
     document.querySelectorAll('[data-project-id]').forEach(div => {
         const projectId = div.getAttribute('data-project-id');
@@ -197,12 +206,21 @@ document.getElementById('submit-loads-btn').addEventListener('click', async () =
         const prioritySelect = div.querySelector(`select[name="priority_${projectId}"]`);
 
         if (hoursInput && hoursInput.value.trim() !== '') {
-            data[`hours_${projectId}`] = hoursInput.value;
+            const hours = parseFloat(hoursInput.value);
+            if (!isNaN(hours)) {
+                totalHours += hours;
+                data[`hours_${projectId}`] = hoursInput.value;
+            }
         }
         if (prioritySelect) {
             data[`priority_${projectId}`] = prioritySelect.value;
         }
     });
+
+    if (totalHours > 8) {
+        alert(`Суммарное количество часов не должно превышать 8. Сейчас: ${totalHours.toFixed(2)}`);
+        return;
+    }
 
     try {
         const response = await fetch('/submit_loads', {
@@ -289,6 +307,7 @@ document.getElementById('delete-loads-btn').addEventListener('click', async () =
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ editor_id: editorId, date: date || null }),
+
         });
 
         if (!response.ok) {
@@ -302,6 +321,33 @@ document.getElementById('delete-loads-btn').addEventListener('click', async () =
         alert('Ошибка при удалении нагрузки: ' + e.message);
     }
 });
+document.querySelectorAll('input[type="number"][id^="hours_"]').forEach(input => {
+    input.addEventListener('input', () => {
+        let val = input.value;
+
+        // Если длина больше 1, и начинается с '0', и вторая цифра не точка - убираем ведущий ноль
+        if (val.length > 1 && val.startsWith('0') && val[1] !== '.') {
+            val = val.slice(1);
+            input.value = val;
+        }
+
+        let numVal = parseFloat(input.value);
+        if (isNaN(numVal) || numVal < 0) {
+            input.value = 0;
+        } else if (numVal > 8) {
+            input.value = 8;
+        }
+    });
+
+    // Также можно очистить поле при фокусе, если там '0'
+    input.addEventListener('focus', () => {
+        if (input.value === '0') {
+            input.value = '';
+        }
+    });
+});
+
 </script>
+
 </body>
 </html>

@@ -514,7 +514,42 @@ def get_load_results():
             'load_data': load_data
         })
     return jsonify(output)
+from datetime import date
 
+@app.route('/visualization_editors')
+def visualization_editors():
+    # Получаем всех редакторов из базы, чтобы отдать в выпадающий список
+    editors = Editor.query.order_by(Editor.login).all()
+    today_str = date.today().isoformat()
+    return render_template('visualization_editors.html', editors=editors, today=today_str)
+
+@app.route('/get_editor_loads')
+def get_editor_loads():
+    editor_id = request.args.get('editor_id')
+    date_str = request.args.get('date')
+
+    if not editor_id or not date_str:
+        return jsonify({'error': 'Не передан editor_id или date'}), 400
+
+    # Преобразуем дату из строки в объект date
+    try:
+        date_obj = date.fromisoformat(date_str)
+    except ValueError:
+        return jsonify({'error': 'Некорректный формат даты'}), 400
+
+    # Выбираем нагрузки для этого редактора и даты
+    loads = LoadEntry.query.filter_by(editor_id=editor_id, date=date_obj).all()
+
+    result = []
+    for load in loads:
+        project = load.project  # SQLAlchemy связь
+        result.append({
+            'project_id': project.id,
+            'project_name': project.name,
+            'hours': load.hours
+        })
+
+    return jsonify({'loads': result})
 
 # --- Запуск ---
 if __name__ == '__main__':
