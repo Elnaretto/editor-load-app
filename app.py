@@ -7,11 +7,6 @@ import pandas as pd
 import io
 from openpyxl import Workbook
 import os
-from your_flask_app import app, db
-
-with app.app_context():
-    db.create_all()
-
 
 
 app = Flask(__name__)
@@ -306,6 +301,7 @@ def export_excel():
 def visualization():
     chiefs = Chief.query.all()
     selected_chief_id = request.args.get('chief_id', type=int)
+    load_results = LoadResult.query.all()
 
     if selected_chief_id is None:
         selected_chief_id = 0  # по умолчанию показываем всю редакцию
@@ -369,7 +365,6 @@ def visualization():
         } for idx, row in project_data.iterrows()]
 
     # Загрузка сохранённых результатов нагрузки
-    load_results = LoadResult.query.all()
     import json
     saved_results = []
     for r in load_results:
@@ -542,7 +537,6 @@ def get_load_results():
             'load_data': load_data
         })
     return jsonify(output)
-from datetime import date
 
 @app.route('/visualization_editors')
 def visualization_editors():
