@@ -6,7 +6,6 @@ import plotly.io as pio
 import pandas as pd
 import io
 from openpyxl import Workbook
-import os
 import json
 
 app = Flask(__name__)
@@ -20,23 +19,11 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'max_overflow': 0
 }
 
-# Подключение к базе данных через переменную окружения
-db_url = os.environ.get("DATABASE_URL")
-if db_url and db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
+# Используем SQLite по умолчанию
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///load_data.db'
 
-if not db_url:
-    db_url = 'sqlite:///load_data.db'
-
-if "postgresql" in db_url:
-    app.config['SQLALCHEMY_DATABASE_URI'] = db_url + "?sslmode=require"
-else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
-
+# Инициализация базы
 db = SQLAlchemy(app)
-
-from flask_migrate import Migrate
-migrate = Migrate(app, db)
 
 # Модели данных
 class Chief(db.Model):
