@@ -1,12 +1,14 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, date
 import plotly.express as px
 import plotly.io as pio
 import pandas as pd
 import io
 from openpyxl import Workbook
 import os
+
+
 
 app = Flask(__name__)
 
@@ -353,10 +355,7 @@ def visualization():
             'hours': row['hours']
         } for idx, row in project_data.iterrows()]
 
-    return render_template('visualization.html', chiefs=chiefs, selected_chief_id=selected_chief_id,
-                           graph_html=graph_html, details=details, message=None)
-
-
+    # Загрузка сохранённых результатов нагрузки
     load_results = LoadResult.query.all()
     import json
     saved_results = []
@@ -371,7 +370,10 @@ def visualization():
             'load_data': load_data
         })
 
-    return render_template('visualization.html', ..., saved_results=saved_results)
+    return render_template('visualization.html', chiefs=chiefs, selected_chief_id=selected_chief_id,
+                           graph_html=graph_html, details=details, message=None,
+                           saved_results=saved_results)
+
 
 
 @app.route('/update_priority', methods=['POST'])
