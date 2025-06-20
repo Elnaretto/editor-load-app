@@ -30,8 +30,9 @@ from flask_migrate import Migrate
 
 migrate = Migrate(app, db)
 
-# --- Модели ---
 class Chief(db.Model):
+    __tablename__ = 'chief'  # 👈 важно
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
     editors = db.relationship('Editor', backref='chief', lazy=True)
