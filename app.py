@@ -1,23 +1,31 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import plotly.express as px
 import plotly.io as pio
 import pandas as pd
-from flask import send_file
 import io
 from openpyxl import Workbook
 import os
 
 app = Flask(__name__)
-# Используем переменную окружения с внешним URL + SSL
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL") + "?sslmode=require"
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
 
-# 👇 Добавь это временно
-with app.app_context():
-    db.create_all()
+# Подключение к базе данных через переменную окружения
+db_url = os.environ.get("DATABASE_URL")
+
+db_url = os.environ.get("DATABASE_URL")
+
+# Если работаем с Render и у нас postgres:// — меняем на postgresql://
+if db_url and db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+# Если переменная не задана (локально), используем SQLite
+if not db_url:
+    db_url = 'sqlite:///load_data.db'
+
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url + ("?sslmode=require" if "postgresql" in db_url else "")
+
+db = SQLAlchemy(app)
 
 # --- Модели ---
 class Chief(db.Model):
