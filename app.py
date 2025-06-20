@@ -8,7 +8,6 @@ import io
 from openpyxl import Workbook
 import os
 
-
 app = Flask(__name__)
 
 # Подключение к базе данных через переменную окружения
@@ -126,7 +125,12 @@ def seed_db():
             p = Project(name=pname)
             db.session.add(p)
         db.session.commit()
-
+        
+        
+@app.route('/initdb')
+def initdb():
+    db.create_all()
+    return "База инициализирована"
 
 @app.route('/')
 def index():
