@@ -7,11 +7,17 @@ import pandas as pd
 from flask import send_file
 import io
 from openpyxl import Workbook
+import os
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///load_data.db'
+# Используем переменную окружения с внешним URL + SSL
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL") + "?sslmode=require"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
+# 👇 Добавь это временно
+with app.app_context():
+    db.create_all()
 
 # --- Модели ---
 class Chief(db.Model):
