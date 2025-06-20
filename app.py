@@ -13,17 +13,16 @@ app = Flask(__name__)
 # Подключение к базе данных через переменную окружения
 db_url = os.environ.get("DATABASE_URL")
 
-db_url = os.environ.get("DATABASE_URL")
-
-# Если работаем с Render и у нас postgres:// — меняем на postgresql://
 if db_url and db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
-# Если переменная не задана (локально), используем SQLite
 if not db_url:
     db_url = 'sqlite:///load_data.db'
 
-app.config['SQLALCHEMY_DATABASE_URI'] = db_url + ("?sslmode=require" if "postgresql" in db_url else "")
+if "postgresql" in db_url:
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_url + "?sslmode=require"
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 
 db = SQLAlchemy(app)
 

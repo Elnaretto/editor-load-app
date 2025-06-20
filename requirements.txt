@@ -4,3 +4,5 @@ pandas
 plotly
 openpyxl
 gunicorn
+psycopg2-binary
+
