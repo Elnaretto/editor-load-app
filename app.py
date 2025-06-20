@@ -30,8 +30,7 @@ from flask_migrate import Migrate
 migrate = Migrate(app, db)
 
 class Chief(db.Model):
-    __tablename__ = 'chief'  # 👈 важно
-
+    __tablename__ = 'chief'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
     editors = db.relationship('Editor', backref='chief', lazy=True)
@@ -126,11 +125,11 @@ def seed_db():
             db.session.add(p)
         db.session.commit()
         
-        
 @app.route('/initdb')
 def initdb():
     db.create_all()
-    return "База инициализирована"
+    return "База данных создана!"
+       
 
 @app.route('/')
 def index():
