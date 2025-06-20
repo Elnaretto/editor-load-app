@@ -7,6 +7,12 @@ import pandas as pd
 import io
 from openpyxl import Workbook
 import os
+from your_flask_app import app, db
+
+with app.app_context():
+    db.create_all()
+
+
 
 app = Flask(__name__)
 
@@ -26,6 +32,7 @@ else:
 
 db = SQLAlchemy(app)
 from flask_migrate import Migrate
+
 
 migrate = Migrate(app, db)
 
