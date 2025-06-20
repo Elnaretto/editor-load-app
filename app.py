@@ -9,7 +9,6 @@ from openpyxl import Workbook
 import os
 
 
-
 app = Flask(__name__)
 
 # Подключение к базе данных через переменную окружения
@@ -27,6 +26,9 @@ else:
     app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 
 db = SQLAlchemy(app)
+from flask_migrate import Migrate
+
+migrate = Migrate(app, db)
 
 # --- Модели ---
 class Chief(db.Model):
