@@ -20,20 +20,40 @@
 
   <h1>Визуализация нагрузки по проектам</h1>
 
-  <form method="get" action="{{ url_for('visualization') }}">
-    <label for="chief-select">Выберите шефа:</label>
-    <select id="chief-select" name="chief_id" onchange="this.form.submit()">
-      <option value="0" {% if selected_chief_id == 0 %}selected{% endif %}>Вся редакция</option>
-      {% for chief in chiefs %}
-        <option value="{{ chief.id }}" {% if chief.id == selected_chief_id %}selected{% endif %}>
-          {{ chief.name }}
-        </option>
-      {% endfor %}
-    </select>
+  <!-- Обновленная форма с полем даты -->
+  <form method="get" action="{{ url_for('visualization') }}" class="mb-3">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label for="chief-select" class="form-label">Выберите шефа:</label>
+        <select id="chief-select" name="chief_id" class="form-select" onchange="this.form.submit()">
+          <option value="0" {% if selected_chief_id == 0 %}selected{% endif %}>Вся редакция</option>
+          {% for chief in chiefs %}
+            <option value="{{ chief.id }}" {% if chief.id == selected_chief_id %}selected{% endif %}>
+              {{ chief.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      
+      <div class="col-md-4">
+        <label for="date-select" class="form-label">Выберите дату (оставьте пустым для всего времени):</label>
+        <input type="date" 
+               id="date-select" 
+               name="date" 
+               class="form-control" 
+               value="{{ selected_date or '' }}"
+               onchange="this.form.submit()">
+      </div>
+      
+      <div class="col-md-4 d-flex align-items-end">
+        <button type="submit" class="btn btn-primary me-2">Применить</button>
+        <a href="{{ url_for('visualization') }}" class="btn btn-secondary">Сбросить</a>
+      </div>
+    </div>
   </form>
 
   {% if message %}
-    <p>{{ message }}</p>
+    <div class="alert alert-info">{{ message }}</div>
   {% endif %}
 
 {% if graph_html %}
@@ -56,13 +76,22 @@
     </ul>
   {% endif %}
 {% endif %}
+
   <form method="GET" action="{{ url_for('export_excel') }}" style="margin-top: 20px;">
-  <label for="startDate">С:</label>
-  <input type="date" id="startDate" name="start_date" required>
-  <label for="endDate">По:</label>
-  <input type="date" id="endDate" name="end_date" required>
-  <button type="submit" class="btn-export">Выгрузить Excel</button>
-</form>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <label for="startDate" class="form-label">С:</label>
+        <input type="date" id="startDate" name="start_date" class="form-control" required>
+      </div>
+      <div class="col-md-3">
+        <label for="endDate" class="form-label">По:</label>
+        <input type="date" id="endDate" name="end_date" class="form-control" required>
+      </div>
+      <div class="col-md-3 d-flex align-items-end">
+        <button type="submit" class="btn btn-success">Выгрузить Excel</button>
+      </div>
+    </div>
+  </form>
 
   <br>
   <button onclick="window.history.back()" class="btn btn-secondary">Назад</button>
@@ -70,10 +99,16 @@
 </body>
 <script>
   const selectedChiefId = {{ selected_chief_id or 0 }};
+  const selectedDate = "{{ selected_date or '' }}";
   
   async function refreshData() {
     try {
-      const response = await fetch(`/api/visualization_data?chief_id=${selectedChiefId}`);
+      let url = `/api/visualization_data?chief_id=${selectedChiefId}`;
+      if (selectedDate) {
+        url += `&date=${selectedDate}`;
+      }
+      
+      const response = await fetch(url);
       if (!response.ok) {
         console.error("Ошибка загрузки данных для визуализации");
         return;

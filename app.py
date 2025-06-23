@@ -344,6 +344,7 @@ def visualization():
     try:
         chiefs = Chief.query.all()
         selected_chief_id = request.args.get('chief_id', type=int)
+        selected_date_str = request.args.get('date')  # Добавляем параметр даты
         
         if selected_chief_id is None:
             selected_chief_id = 0  # по умолчанию показываем всю редакцию
@@ -359,13 +360,36 @@ def visualization():
             chief_name = chief.name
 
         editor_ids = [e.id for e in editors]
-        loads = db.session.query(LoadEntry, Editor, Project)\
+        
+        # Базовый запрос
+        query = db.session.query(LoadEntry, Editor, Project)\
             .join(Editor).join(Project)\
-            .filter(LoadEntry.editor_id.in_(editor_ids)).all()
+            .filter(LoadEntry.editor_id.in_(editor_ids))
+        
+        # Если выбрана дата, фильтруем по ней
+        if selected_date_str:
+            try:
+                selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
+                query = query.filter(LoadEntry.date == selected_date)
+                date_title = f" на {selected_date.strftime('%d.%m.%Y')}"
+            except ValueError:
+                selected_date_str = None
+                date_title = " (все время)"
+        else:
+            date_title = " (все время)"
+        
+        loads = query.all()
 
         if not loads:
-            return render_template('visualization.html', chiefs=chiefs, selected_chief_id=selected_chief_id,
-                                   graph_html=None, message="Нет данных для выбранного шефа.")
+            message = f"Нет данных для выбранного шефа"
+            if selected_date_str:
+                message += f" на дату {selected_date_str}"
+            return render_template('visualization.html', 
+                                 chiefs=chiefs, 
+                                 selected_chief_id=selected_chief_id,
+                                 selected_date=selected_date_str,
+                                 graph_html=None, 
+                                 message=message)
 
         rows = []
         for load, editor, project in loads:
@@ -376,7 +400,14 @@ def visualization():
             })
 
         df = pd.DataFrame(rows)
-        df_grouped = df.groupby(['project', 'editor'], as_index=False).sum()
+        
+        # Если выбрана конкретная дата, не группируем по времени
+        if selected_date_str:
+            df_grouped = df.groupby(['project', 'editor'], as_index=False).sum()
+        else:
+            # Для "все время" - суммируем все записи
+            df_grouped = df.groupby(['project', 'editor'], as_index=False).sum()
+            
         df_summary = df_grouped.groupby('project').agg(
             total_hours=pd.NamedAgg(column='hours', aggfunc='sum'),
             editors_count=pd.NamedAgg(column='editor', aggfunc='nunique')
@@ -387,7 +418,7 @@ def visualization():
             x='project',
             y='total_hours',
             text=df_summary.apply(lambda row: f"{row.editors_count} редактор(ов)", axis=1),
-            title=f"Нагрузка по проектам — {chief_name}",
+            title=f"Нагрузка по проектам — {chief_name}{date_title}",
             labels={'total_hours': 'Всего часов', 'project': 'Проект'},
             template="plotly_white"
         )
@@ -416,9 +447,14 @@ def visualization():
                 'load_data': load_data
             })
 
-        return render_template('visualization.html', chiefs=chiefs, selected_chief_id=selected_chief_id,
-                               graph_html=graph_html, details=details, message=None,
-                               saved_results=saved_results)
+        return render_template('visualization.html', 
+                             chiefs=chiefs, 
+                             selected_chief_id=selected_chief_id,
+                             selected_date=selected_date_str,
+                             graph_html=graph_html, 
+                             details=details, 
+                             message=None,
+                             saved_results=saved_results)
     
     except Exception as e:
         return f"Ошибка при визуализации: {e}"
