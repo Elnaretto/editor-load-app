@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, date
@@ -19,11 +20,17 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'max_overflow': 0
 }
 
-# Используем SQLite по умолчанию
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///load_data.db'
+# Получаем URL из переменной окружения, если она задана
+db_url = os.environ.get("DATABASE_URL")
+if db_url and db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+# Устанавливаем URI подключения
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url or 'sqlite:///load_data.db'
 
 # Инициализация базы
 db = SQLAlchemy(app)
+
 
 # Модели данных
 class Chief(db.Model):
@@ -138,10 +145,11 @@ def seed_db():
 def initdb():
     try:
         db.create_all()
-        seed_db()
+        seed_db()  # если у тебя есть функция seed_db
         return "База данных создана!"
     except Exception as e:
         return f"Ошибка при создании базы данных: {e}"
+
 
 @app.route('/')
 def index():
